@@ -1,0 +1,60 @@
+# tensor dumps
+*.pt
+# Compiler Output #
+###################
+*.py[cod]
+*.so
+*.o
+*.exe
+*.class
+
+# Folders #
+###########
+bin/
+build/
+dist/
+local/
+tmp/
+experiments/
+antibact_experiments/
+antibact_prediction/
+antibact_prediction_mm
+antibact_final_training/
+lambdarank_randomsap_exp
+data_ppi/
+data/
+prediction/
+history/
+tests/
+variant-prediction
+data_antibact/
+compare/
+examples
+__pycache__/
+*.egg-info/
+.ipynb_checkpoints/
+.vscode/
+
+# some checkout files
+demo_test.py
+checkout.py
+transfer_learning_test.py
+model_analyse.py
+temp.py
+setup.py
+autoencoder.py
+antibact_ranking.py
+antibact_ranking_new.py
+lambdarank_multimodal.py
+lambdarank_ddp.py
+pipeline_mm.py
+quick.sh
+README_ori.md
+# Junk #
+########
+.DS_Store*
+.*.swp
+*.swp
+*.log
+*~
+说明.txt
