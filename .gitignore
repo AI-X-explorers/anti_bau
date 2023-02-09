@@ -50,6 +50,7 @@ lambdarank_ddp.py
 pipeline_mm.py
 quick.sh
 README_ori.md
+progress.md
 # Junk #
 ########
 .DS_Store*

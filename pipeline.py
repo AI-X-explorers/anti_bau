@@ -15,6 +15,7 @@ import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 from collections import namedtuple
 from model import AntibactCLSModel,AntibactRegModel,NormalMLP
+from dataset import AntibactCLS_Dataset,LambdaRank_dataset,AntibactReg_Dateset
 from utils.logger import Logger
 from utils.ranking_tool import ranking_tool
 from utils.antibact_preprocess import EmbeddingProcessor
@@ -58,20 +59,27 @@ class Antibact_predictor():
         self.logger.info(f"{'Peptides':^12} | {'Postive':^12} | {'Elapsed':^9}")
         t0 = time.time()
         self.postive_peptides = []
-        for idx,peptide in enumerate(self.all_peptides):
-            data = [(peptide,peptide)]
+        batch_size = args.cls_bs
+        total_samples_times = int((len(self.all_peptides)/batch_size)) + 1
+        samples_num = 0
+        for idx in range(total_samples_times):
+        # for idx,peptide in enumerate(self.all_peptides):
+            peptides = self.all_peptides[idx*batch_size:(idx+1)*batch_size]
+            # data = [(peptide,peptide)]
+            data = [(i,i) for i in peptides]
             _, _, batch_tokens = self.batch_converter(data)
             batch_tokens = batch_tokens.to(self.local_rank)
             with torch.no_grad():
                 logits = self.model(batch_tokens)
-            pred = torch.sigmoid(logits)
-            pred = pred >= 0.5
-            pred = pred.item()
-            if pred:
-                self.postive_peptides.append(peptide)
-            if (idx % 2000 == 0 and idx != 0) or (idx == len(self.all_peptides) - 1):
+            preds = torch.sigmoid(logits)
+            preds = preds >= 0.5
+            samples_num += len(preds)
+            true_index = preds.cpu().numpy()
+            peptides = np.array(peptides)
+            self.postive_peptides.extend(list(peptides[true_index]))
+            if (samples_num % 4000 == 0 and samples_num != 0) or (idx == len(self.all_peptides) - 1):
                 time_elapsed = time.time() - t0
-                self.logger.info(f"{idx:^12} | {len(self.postive_peptides):^12} | {time_elapsed:^9.2f}")
+                self.logger.info(f"{samples_num:^12} | {len(self.postive_peptides):^12} | {time_elapsed:^9.2f}")
                 t0 = time.time()
 
         # Save postive peptides
@@ -210,8 +218,6 @@ def set_seed(seed_value=42):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Antibact regression pretrained-based method')
     parser.add_argument('--peptides_path', default='', help='Path to all peptides data')
-    parser.add_argument('--data_dir', default='data_antibact/final_data/pretrain_based/ranking_data', help='directory of dataset')
-    parser.add_argument('--embeddings_dir', default=None, help='embeddings for ranking')
     parser.add_argument('--prior_model', default='antibact_final_training/cls_finetune1/step1/final.ckpt', 
                         help='prior model to generate embeddings for ranking step')
     parser.add_argument('--cls_pos', default=None, 
@@ -227,7 +233,8 @@ if __name__ == '__main__':
     parser.add_argument('--rank_model', default='NormalMLP', 
                             help='model of choice, e.g. AntibactRegModel,NormalMLP')
     parser.add_argument('--reg_model', default='NormalMLP', 
-                            help='model of choice, e.g. AntibactRegModel,NormalMLP')                            
+                            help='model of choice, e.g. AntibactRegModel,NormalMLP')  
+    parser.add_argument('--cls_bs', default=64, help= 'batchsize of classification model')                            
     parser.add_argument('--only_cls', default=True, 
                             help='Only need cls results') 
     # for ddp
@@ -240,3 +247,4 @@ if __name__ == '__main__':
 
     predictor = Antibact_predictor(args)
     predictor.predict()
+
