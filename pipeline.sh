@@ -1,4 +1,4 @@
-for num in 12 13 14 15 16 
+for num in 28
 do
-    CUDA_VISIBLE_DEVICES=1 python -m torch.distributed.launch --nproc_per_node 1 --master_port 9996 pipeline.py --peptides_path ./antibact_final_training/7_peptide/7_peptide_rule_$num.txt
+    CUDA_VISIBLE_DEVICES=2 python -m torch.distributed.launch --nproc_per_node 1 --master_port 99998 pipeline.py --peptides_path ./antibact_final_training/8_peptide/8_peptide_rule_$num.txt
 done

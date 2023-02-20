@@ -77,7 +77,7 @@ class Antibact_predictor():
             true_index = preds.cpu().numpy()
             peptides = np.array(peptides)
             self.postive_peptides.extend(list(peptides[true_index]))
-            if (samples_num % 4000 == 0 and samples_num != 0) or (idx == len(self.all_peptides) - 1):
+            if (samples_num % 64000 == 0 and samples_num != 0) or (idx == len(self.all_peptides) - 1):
                 time_elapsed = time.time() - t0
                 self.logger.info(f"{samples_num:^12} | {len(self.postive_peptides):^12} | {time_elapsed:^9.2f}")
                 t0 = time.time()
@@ -158,6 +158,9 @@ class Antibact_predictor():
             self.all_peptides = [i.strip('\n') for i in f.readlines()]
         
         self.logger.info("Load peptides successful, total {} peptides to predict".format(len(self.all_peptides)))
+        if len(self.all_peptides) == 0:
+            self.logger.info("No peptides to predict, exit")
+            exit()
 
     def load_results(self, path):
         peptides_df = pd.read_csv(path)
@@ -227,7 +230,7 @@ if __name__ == '__main__':
     parser.add_argument('--resume_cls', default='antibact_final_training/cls_finetune2/step2/final.ckpt', help='path to load your cls model')
     parser.add_argument('--resume_ranking', default='/ssd1/zhangwt/DrugAI/projects/esm/lambdarank_randomsap_exp/ranking_finetune2/Normed_structured/final.ckpt', help='path to load your ranking model')
     parser.add_argument('--resume_reg', default='./antibact_final_training/reg_finetune2/NormalMLP/final.ckpt', help='path to load your reg model')
-    parser.add_argument('--out_dir', default='prediction/7peptides', help='folder to save output')
+    parser.add_argument('--out_dir', default='prediction/8peptides', help='folder to save output')
     parser.add_argument('--structured_data_dir', default='antibact_prediction/normed_strutured_data', help='path to load structured data')
     parser.add_argument('--topK', default=500, type=int,help='top K peptides to rank')
     parser.add_argument('--rank_model', default='NormalMLP', 
