@@ -28,14 +28,14 @@ parser.add_argument('--test_path', default=None, help='test data path')
 parser.add_argument('--data_dir', default='data_antibact/final_data/pretrain_based/train4prediction', help='directory of dataset')
 parser.add_argument('--structured_data_dir', default='data_antibact/final_data/pretrain_based/normed_strutured_data', help='directory of structured data')
 parser.add_argument('--prior_model', default=None, help='introduce prior knowledge of cls model ')
-parser.add_argument('--model_name', default='NormalMLP', 
+parser.add_argument('--model_name', default='AntibactRegModel', 
                     help='model of choice, e.g. AntibactRegModel,NormalMLP')
 parser.add_argument('--resume', default=None, help='path to load your model')
 parser.add_argument('--out_dir', default='antibact_final_training', help='folder to save output')
 parser.add_argument('--task_name', default='reg_finetune1', 
                     help='format task_step, e.g. reg_finetune1,cls_finetune2')
 parser.add_argument('--mode', default='train', type=str,help='train or test')
-parser.add_argument('--epochs', default=40,type=str, help='epochs to train the model')
+parser.add_argument('--epochs', default=40,type=int, help='epochs to train the model')
 parser.add_argument('--lr', default=1e-4,type=float, help='learning rate')
 parser.add_argument('--eps', default=1e-8,type=float, help='default epsilon')
 parser.add_argument('--batchsize', default=4,type=int, help='batchsize')
@@ -68,9 +68,9 @@ def eval_parms(result1,result2,task_name):
     assert (task_name == "reg_finetune2") or (task_name == "reg_finetune1"),"task_name is error"
 
     if task_name == "reg_finetune2":
-        matrix_keys = ['top20_mse','top10_mse','top30_mse']
+        matrix_keys = ['top20_mse','top10_mse','top40_mse']
     else:
-        matrix_keys = ['top100','top20_mse','top10_mse']
+        matrix_keys = ['to40','top20_mse','top10_mse']
     
     idx = len(matrix_keys) - 1
     while(idx >= 0):
@@ -111,7 +111,7 @@ def train(args, model, train_dataloader, loss_fn, val_dataloader=None):
     if dist.get_rank() == 0:
         logger.info("Start training...\n")
 
-    min_topKmse = {"top10_mse":1e7,"top20_mse":1e7,"top30_mse":1e7,"top100_mse":1e7,"pos_mse":1e7}
+    min_topKmse = {"top10_mse":1e7,"top20_mse":1e7,"top40_mse":1e7,"mse":1e7,"pos_mse":1e7}
     for epoch_i in range(args.epochs):
         if dist.get_rank() == 0:
             logger.info(f"{'Epoch':^7} | {'Batch':^7} | {'Train Loss':^12} | {'Val Loss':^10} | {'Val Acc':^9} | {'Elapsed':^9}")
@@ -163,18 +163,18 @@ def train(args, model, train_dataloader, loss_fn, val_dataloader=None):
                 logger.info("epoch {} start evaluation!\n".format(epoch_i+1))
                 res = evaluate(args,model,val_dataloader)
                 if args.task_name == "reg_finetune2":
-                    logger.info(""" Test results: Total {} peptides, MSE: {:.3f}, top10 MSE: {:.3f}, top20 MSE: {:.3f}, top30 MSE: {:.3f}, 
-                                    pos_MSE:{:.3f}""".format(len(val_dataloader),res['mse'],res['top10_mse'],res['top20_mse'],res['top30_mse'],res['pos_mse']))
+                    logger.info(""" Test results: Total {} peptides, MSE: {:.3f}, top10 MSE: {:.3f}, top20 MSE: {:.3f}, top40 MSE: {:.3f}, 
+                                    pos_MSE:{:.3f}""".format(len(val_dataloader),res['mse'],res['top10_mse'],res['top20_mse'],res['top40_mse'],res['pos_mse']))
                 else:
-                    logger.info(""" Test results: Total {} peptides, MSE: {:.3f}, top10 MSE: {:.3f}, top20 MSE: {:.3f}, top100 MSE: {:.3f}, 
-                                    pos_MSE:{:.3f}""".format(len(val_dataloader),res['mse'],res['top10_mse'],res['top20_mse'],res['top100_mse'],res['pos_mse']))
+                    logger.info(""" Test results: Total {} peptides, MSE: {:.3f}, top10 MSE: {:.3f}, top20 MSE: {:.3f}, top40 MSE: {:.3f}, 
+                                    pos_MSE:{:.3f}""".format(len(val_dataloader),res['mse'],res['top10_mse'],res['top20_mse'],res['top40_mse'],res['pos_mse']))
                 time_elapsed = time.time() - t0_epoch
                 logger.info("-" * 70)
                 logger.info('\n')
                 # save best models
                                 
-                eval_indicators = res['top20_mse'] if args.task_name == "reg_finetune2" else res['top100_mse']
-                indicators_name = 'top20_mse' if args.task_name == "reg_finetune2" else 'top100_mse'
+                eval_indicators = res['top20_mse'] if args.task_name == "reg_finetune2" else res['top40_mse']
+                indicators_name = 'top20_mse' if args.task_name == "reg_finetune2" else 'top40_mse'
                 if eval_parms(res,min_topKmse,args.task_name):
                     min_topKmse = res
                     model_path = os.path.join(args.out_dir,"final.ckpt")
@@ -194,13 +194,12 @@ def calculate_matrix(pred,gt):
     gt,pred = results[0],results[1]
     top10_mse = np.mean([(actual - predicted) ** 2 for actual, predicted in zip(gt[0:10], pred[0:10])])
     top20_mse = np.mean([(actual - predicted) ** 2 for actual, predicted in zip(gt[0:20], pred[0:20])])
-    top30_mse = np.mean([(actual - predicted) ** 2 for actual, predicted in zip(gt[0:30], pred[0:30])])
-    top100_mse = np.mean([(actual - predicted) ** 2 for actual, predicted in zip(gt[0:100], pred[0:100])])
+    top40_mse = np.mean([(actual - predicted) ** 2 for actual, predicted in zip(gt[0:40], pred[0:40])])
     mse = np.mean([(actual - predicted) ** 2 for actual, predicted in zip(gt, pred)])
     pos_mse = np.mean([(actual - predicted) ** 2 
                                 for actual, predicted in zip(gt, pred) 
                                 if actual < MAX_MIC - 0.01])
-    res_dict = {'top10_mse':top10_mse,'top20_mse':top20_mse,'top30_mse':top30_mse,'top100_mse':top100_mse,'mse':mse,'pos_mse':pos_mse}
+    res_dict = {'top10_mse':top10_mse,'top20_mse':top20_mse,'top40_mse':top40_mse,'mse':mse,'pos_mse':pos_mse}
     return res_dict
 
 def evaluate(args, model, val_dataloader):
@@ -313,5 +312,5 @@ if __name__ == '__main__':
         args.out_dir = os.path.join(args.out_dir,args.task_name)
         result_df = pd.DataFrame({'Sequence':res['sequence'],'label':res['gt'],'Prediction':res['pred']})
         result_df.to_csv(os.path.join(args.out_dir,'predictions.csv'),index=False)
-        print("Test results: \nMSE: {:.5f}, top10_MSE: {:.5f}, top20_MSE: {:.5f}, top60_MSE:{:.5f}, pos_MSE:{} " \
-                    .format(res['mse'],res['top10_mse'],res['top20_mse'],res['top60_mse'],res['pos_mse']))
+        print("Test results: \nMSE: {:.5f}, top10_MSE: {:.5f}, top20_MSE: {:.5f}, top40_MSE:{:.5f}, pos_MSE:{} " \
+                    .format(res['mse'],res['top10_mse'],res['top20_mse'],res['top40_mse'],res['pos_mse']))

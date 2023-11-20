@@ -7,7 +7,7 @@ def hydrophily_encoding(peptides):
     hydrophily = ["S","T","C","Y","N","Q","D","E","K","R","H"] # 亲水性
     hydrophobe = ["G","A","V","L","I","M","F","W","P"] # 疏水性
 
-    code = [0] * len(peptides)
+    code = ['0'] * len(peptides)
     for idx,pep in enumerate(peptides):
        code[idx] = '1' if pep in hydrophily else '0'
 

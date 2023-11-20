@@ -29,11 +29,11 @@ class StcProcessor:
         self.get_norm_parms(train_df)
         merged_df = pd.concat(datasets.values(),axis=0)
         merged_df.drop(columns=self.label_cols,inplace=True)
-        merged_df.drop_duplicates(['Sequence'], keep='first',inplace=True)
+        merged_df.drop_duplicates(['sequence'], keep='first',inplace=True)
         columns = merged_df.columns.tolist()
         # newDataFrame will retain sequence and normed features, drop label cols
         for col in columns:
-            if (col == 'Sequence'):
+            if (col == 'sequence'):
                 merged_df[col] = merged_df[col]
             else:
                 data = merged_df[col]
@@ -52,7 +52,7 @@ class StcProcessor:
         self.norm_parms = {}
         columns = dataframe.columns.tolist()
         for col in columns:
-            if (col == 'Sequence') or (col in self.label_cols):
+            if (col == 'sequence') or (col in self.label_cols):
                 continue
             else:
                 data = dataframe[col]
@@ -77,13 +77,19 @@ class StcProcessor:
                 hf.create_dataset(seq, data=data)
 
 if __name__ == '__main__':
-    datadir = './datasets/stc_datasets/DeepAmPEP'
-    outdir = './datasets/stc_info'
-    processor = StcProcessor(label_cols=['Labels'])
-    train_data = pd.read_csv(os.path.join(datadir,'train.csv'))
-    test_data = pd.read_csv(os.path.join(datadir,'test.csv'))
-    val_data = pd.read_csv(os.path.join(datadir,'val.csv'))
-    datasets = {'train':train_data,'test':test_data,'val':val_data}
+    # datadir = './datasets/stc_datasets/DeepAmPEP'
+    # outdir = './datasets/stc_info'
+    # processor = StcProcessor(label_cols=['Labels'])
+    # train_data = pd.read_csv(os.path.join(datadir,'train.csv'))
+    # test_data = pd.read_csv(os.path.join(datadir,'test.csv'))
+    # val_data = pd.read_csv(os.path.join(datadir,'val.csv'))
+    # datasets = {'train':train_data,'test':test_data,'val':val_data}
+    # processor.load_datasets(datasets)
+    # processor.generate_normed_data(outdir,'DeepAmPEP.h5')
+
+    processor = StcProcessor(label_cols=[])
+    train_data = pd.read_csv('/ssd1/zhangwt/DrugAI/projects/esm/prediction/6peptides/2023-07-04_21:26:48/stc.csv')
+    datasets = {'train':train_data}
     processor.load_datasets(datasets)
-    processor.generate_normed_data(outdir,'DeepAmPEP.h5')
+    processor.generate_normed_data('/ssd1/zhangwt/DrugAI/projects/esm/prediction/6peptides/2023-07-04_21:26:48','stc.h5')
 

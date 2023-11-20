@@ -6,6 +6,7 @@ import argparse
 import numpy as np
 import pandas as pd
 import h5py
+import math
 import esm
 from tqdm import tqdm
 import torch
@@ -18,7 +19,6 @@ from model import AntibactCLSModel,AntibactRegModel,NormalMLP
 from dataset import AntibactCLS_Dataset,LambdaRank_dataset,AntibactReg_Dateset
 from utils.logger import Logger
 from utils.ranking_tool import ranking_tool
-from utils.antibact_preprocess import EmbeddingProcessor
 from utils.analyse_peptides import hydrophily_analyse
 
 class Antibact_predictor():
@@ -26,17 +26,17 @@ class Antibact_predictor():
         self.args = args
         self.model = None
         self.logger_init()
-        self.load_peptides()
         alphabet = esm.Alphabet.from_architecture("roberta_large")
         self.batch_converter = alphabet.get_batch_converter()
         self.local_rank = args.local_rank
-        self.enc_dir = self.args.structured_data_dir
+        self.enc_path = self.args.structured_data_path
     
     def _pipeline(self):
         
         if self.args.ranking_results == None:
             # Cls
             if self.args.cls_pos == None:
+                self.load_peptides()
                 self.cls_predict()
                 if self.args.only_cls:
                     exit()
@@ -59,13 +59,11 @@ class Antibact_predictor():
         self.logger.info(f"{'Peptides':^12} | {'Postive':^12} | {'Elapsed':^9}")
         t0 = time.time()
         self.postive_peptides = []
-        batch_size = args.cls_bs
-        total_samples_times = int((len(self.all_peptides)/batch_size)) + 1
+        batch_size = args.bs
+        total_samples_times = math.ceil(len(self.all_peptides)/batch_size)
         samples_num = 0
         for idx in range(total_samples_times):
-        # for idx,peptide in enumerate(self.all_peptides):
             peptides = self.all_peptides[idx*batch_size:(idx+1)*batch_size]
-            # data = [(peptide,peptide)]
             data = [(i,i) for i in peptides]
             _, _, batch_tokens = self.batch_converter(data)
             batch_tokens = batch_tokens.to(self.local_rank)
@@ -89,27 +87,30 @@ class Antibact_predictor():
         self.model = None
 
     def ranking_predict(self):
-        # self._generate_embeddings()
         self._get_ranking_model()
-
         self.logger.info("Step2: Ranking start !")
         sequences = []
         pred_scores = []
-        for peptide in tqdm(self.postive_peptides):
-
+        batch_size = args.bs
+        total_samples_times = math.ceil((len(self.postive_peptides)/batch_size))
+        for idx in tqdm(range(total_samples_times)):
+            peptides = self.postive_peptides[idx*batch_size:(idx+1)*batch_size]
             if self.args.rank_model == 'AntibactRegModel':
-                data = [(peptide,peptide)]
+                data = [(i,i) for i in peptides]
                 _, _, batch_tokens = self.batch_converter(data)
                 batch_tokens = batch_tokens.to(self.local_rank)
                 input = batch_tokens
             elif self.args.rank_model == 'NormalMLP':
-                enc_pep = torch.tensor(self.load_encodings(peptide)).to(self.local_rank)
-                input = enc_pep
+                enc = []
+                for seq in peptides:
+                    enc.append(self.load_encodings(seq))
+                enc = np.concatenate(enc,axis=0)
+                input = torch.tensor(enc).to(self.local_rank)
             with torch.no_grad():
                 pred_logits = self.model(input)
-                pred_scores.append(pred_logits.item())
-            sequences.append(peptide)
-
+                pred_logits = pred_logits.cpu().numpy().tolist()
+                pred_scores.extend(pred_logits)
+            sequences.extend(peptides)
         pred_df = pd.DataFrame({'sequence':sequences,'pred_scores':pred_scores})
         pred_df.sort_values('pred_scores', ascending= False, inplace=True)         
         pred_df = pred_df.iloc[:self.args.topK]
@@ -167,13 +168,19 @@ class Antibact_predictor():
         peptides = peptides_df['sequence'].tolist()
         return peptides
 
+    # def load_encodings(self, protein_name):
+    #     fpath = os.path.join(self.enc_dir,'{}.h5'.format(protein_name))
+    #     with h5py.File(fpath, 'r') as hf:
+    #         embeddings = hf[protein_name][:]
+    #     embeddings = np.expand_dims(embeddings,axis=0)
+    #     return embeddings
+
     def load_encodings(self, protein_name):
-        fpath = os.path.join(self.enc_dir,'{}.h5'.format(protein_name))
-        with h5py.File(fpath, 'r') as hf:
+        with h5py.File(self.enc_path, 'r') as hf:
             embeddings = hf[protein_name][:]
         embeddings = np.expand_dims(embeddings,axis=0)
         return embeddings
-
+    
     def _get_cls_model(self):
         self.model = AntibactCLSModel().to(self.local_rank)
         ckpt_path = self.args.resume_cls
@@ -197,9 +204,9 @@ class Antibact_predictor():
         self.logger.info("Load ranking model successfully")
 
     def _get_reg_model(self):
-        if self.args.rank_model == 'AntibactRegModel':
+        if self.args.reg_model == 'AntibactRegModel':
             self.model = AntibactRegModel()
-        elif self.args.rank_model == 'NormalMLP':
+        elif self.args.reg_model == 'NormalMLP':
             self.model = NormalMLP()
         self.model.to(self.args.local_rank)
         ckpt_path = self.args.resume_reg
@@ -220,7 +227,7 @@ def set_seed(seed_value=42):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Antibact regression pretrained-based method')
-    parser.add_argument('--peptides_path', default='', help='Path to all peptides data')
+    parser.add_argument('--peptides_path', default='/ssd1/zhangwt/DrugAI/projects/esm/antibact_final_training/Hexapeptides.txt', help='Path to all peptides data')
     parser.add_argument('--prior_model', default='antibact_final_training/cls_finetune1/step1/final.ckpt', 
                         help='prior model to generate embeddings for ranking step')
     parser.add_argument('--cls_pos', default=None, 
@@ -228,17 +235,20 @@ if __name__ == '__main__':
     parser.add_argument('--ranking_results', default=None, 
                         help='Load ranking top results, then start regression ')                                            
     parser.add_argument('--resume_cls', default='antibact_final_training/cls_finetune2/step2/final.ckpt', help='path to load your cls model')
+    # parser.add_argument('--resume_cls', default='antibact_final_training/cls_finetune1/step1/final.ckpt', help='path to load your cls model')
     parser.add_argument('--resume_ranking', default='/ssd1/zhangwt/DrugAI/projects/esm/lambdarank_randomsap_exp/ranking_finetune2/Normed_structured/final.ckpt', help='path to load your ranking model')
-    parser.add_argument('--resume_reg', default='./antibact_final_training/reg_finetune2/NormalMLP/final.ckpt', help='path to load your reg model')
-    parser.add_argument('--out_dir', default='prediction/8peptides', help='folder to save output')
-    parser.add_argument('--structured_data_dir', default='antibact_prediction/normed_strutured_data', help='path to load structured data')
+    # parser.add_argument('--resume_ranking', default='/ssd1/zhangwt/DrugAI/projects/esm/lambdarank_randomsap_exp/ranking_finetune1/Normed_sturctured/final.ckpt', help='path to load your ranking model')
+    parser.add_argument('--resume_reg', default='./antibact_final_training/reg_finetune2/step2/final.ckpt', help='path to load your reg model')
+    # parser.add_argument('--resume_reg', default='./antibact_final_training/reg_finetune1/step1/final.ckpt', help='path to load your reg model')
+    parser.add_argument('--out_dir', default='prediction/6peptides', help='folder to save output')
+    parser.add_argument('--structured_data_path', default='None', help='path to load structured data')
     parser.add_argument('--topK', default=500, type=int,help='top K peptides to rank')
     parser.add_argument('--rank_model', default='NormalMLP', 
                             help='model of choice, e.g. AntibactRegModel,NormalMLP')
-    parser.add_argument('--reg_model', default='NormalMLP', 
+    parser.add_argument('--reg_model', default='AntibactRegModel', 
                             help='model of choice, e.g. AntibactRegModel,NormalMLP')  
-    parser.add_argument('--cls_bs', default=64, help= 'batchsize of classification model')                            
-    parser.add_argument('--only_cls', default=True, 
+    parser.add_argument('--bs', default=64, help= 'batchsize of model')                            
+    parser.add_argument('--only_cls', default=None, 
                             help='Only need cls results') 
     # for ddp
     parser.add_argument("--local_rank", default=-1, type=int)

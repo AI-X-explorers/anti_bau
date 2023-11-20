@@ -41,7 +41,6 @@ parser.add_argument('--eps', default=1e-8,type=float, help='default epsilon')
 parser.add_argument('--batchsize', default=32,type=int, help='batchsize')
 parser.add_argument('--acc_size', default=1000,type=int, help='batchsize')
 
-Peptide_withscore = namedtuple('Peptide_withscore',('pre_idx','mic','label'))
 def set_seed(seed_value=42):
     """
     Set seed for reproducibility.
@@ -117,7 +116,6 @@ def train(args, model, train_dataloader, val_dataloader=None):
         logger.info(str(arg).format('<20')+":\t"+str(getattr(args, arg)).format('<'))
 
     # Create the optimizer, 
-    # because we need to finetune transformer layers, use traditional Adam,instead of Adamw
     optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), \
                                 lr=args.lr,eps=args.eps)
 

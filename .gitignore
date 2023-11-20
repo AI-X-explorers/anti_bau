@@ -34,6 +34,7 @@ __pycache__/
 *.egg-info/
 .ipynb_checkpoints/
 .vscode/
+scripts4draw/
 
 # some checkout files
 demo_test.py
@@ -47,6 +48,7 @@ antibact_ranking.py
 antibact_ranking_new.py
 lambdarank_multimodal.py
 lambdarank_ddp.py
+model_slf.py
 pipeline_mm.py
 quick.sh
 README_ori.md
@@ -59,3 +61,4 @@ progress.md
 *.log
 *~
 说明.txt
+.gitignore

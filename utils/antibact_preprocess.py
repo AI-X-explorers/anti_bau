@@ -17,18 +17,26 @@ class encodingProcessor:
         self.df = None
         self.norm_parms = norm_parms if norm_parms else None
     
-    def get_norm_parms(self, data_csv_path, save_path=None):
+    def load_norm_parms(self, parms_path):
         """
-        Get normalization parameters from training data
+        Load normalization params from pkl
+        """
+        with open (parms_path, "rb") as f:
+            self.norm_parms = pickle.load(f)
+        print(self.norm_parms)
+    def get_norm_parms(self, data_csv_path, sample_ratio=0.1, save_path=None):
+        """
+        Get normalization parameters from data to be predicted
+        Since the dataset is too large, downsampling is needed
         Args:
-            data_csv_path: Path to training data csv
+            data_csv_path: Path to directory of training data csvs
             save_path: Path to save normalization args, format: .pkl
         """
-        dataframe = pd.read_csv(data_csv_path)
+        dataframe = self.downsampling_datasets(data_csv_path,sample_ratio)
         self.norm_parms = {}
         columns = dataframe.columns.tolist()
         for col in columns:
-            if (col == 'Sequence') or (col in self.label_cols):
+            if (col == 'sequence') or (col in self.label_cols):
                 continue
             else:
                 data = dataframe[col]
@@ -42,7 +50,28 @@ class encodingProcessor:
             os.makedirs(dir_name,exist_ok=True)
             with open(save_path, "wb") as f:
                 pickle.dump(self.norm_parms,f)
-
+            print("norm parameters saved in: {}".format(save_path))
+            
+    def downsampling_datasets(self, data_dir, sample_ratio=0.1):
+        """
+        Since the dataset is too large, downsampling is needed
+        Args:
+            data_dir: directory of data to be predicted
+            sample_ratio: sample_ratio
+        Return: downsampled dataframe
+        """
+        df_list = [os.path.join(data_dir,i) for i in os.listdir(data_dir)]
+        sampled_df = pd.DataFrame([])
+        print("total {} dataframes to downsample".format(len(df_list)))
+        for path in tqdm(df_list):
+            print(path)
+            df_temp = pd.read_csv(path)
+            df_temp = df_temp.sample(frac=sample_ratio,random_state=42,replace=False)
+            sampled_df = pd.concat([sampled_df,df_temp])
+        sampled_df.reset_index(inplace=True,drop=True)
+        print("sampled dataframe shape: ",sampled_df.shape)
+        return sampled_df
+            
     def get_data_from_dataset(self, file):
         assert self.norm_parms
         df = pd.read_csv(file)
@@ -75,28 +104,38 @@ class encodingProcessor:
                 data = np.array(self.df.iloc[i,1:]).astype(np.float32)
                 data = torch.tensor(data)
                 hf.create_dataset(seq, data=data)
+        self.df = None
 
 if __name__ == '__main__':
-    
-    # 1. get normed args from training data
+    Processor = encodingProcessor()
+    '''
+    # for prediction steps
+    ## 1. get normed args from data 
+    dataset_path = '/ssd1/zhangwt/DrugAI/projects/esm/prediction/8peptides/structured_data'
+    save_path='data_antibact/final_data/pretrain_based/norm_params/8_peptides_bau.pkl'
+    Processor.get_norm_parms(dataset_path,sample_ratio=0.1,save_path=save_path)
+    ## 2. convert target datasets to normalized data and save 
+    dataset_dir = '/ssd1/zhangwt/DrugAI/projects/esm/prediction/8peptides/structured_data'
+    datasets = [os.path.join(dataset_dir, i) for i in os.listdir(dataset_dir)]
+    # save_dir = '/ssd1/zhangwt/DrugAI/projects/esm/prediction/7peptides/normed_stc_data'
+    save_dir = '/data/zhangwt/data4prediction/8peptides/structured_data'
+    print("total {} datasets h5file to be generated".format(len(datasets)))
+    for path in datasets:
+        Processor.get_data_from_dataset(path)
+        _, fname = os.path.split(path)
+        fname, _ = os.path.splitext(fname)
+        print("file {} start generation".format(os.path.join(save_dir,'{}.h5'.format(fname))))
+        Processor.generate_normed_data(save_dir,'{}.h5'.format(fname))
+'''
+    Processor.load_norm_parms('data_antibact/final_data/pretrain_based/norm_params/8_peptides_bau.pkl')
+    datasets = ['/ssd1/zhangwt/DrugAI/projects/esm/prediction/8peptides/structured_data/rule_2_0.csv',
+                '/ssd1/zhangwt/DrugAI/projects/esm/prediction/8peptides/structured_data/rule_9_0.csv']
+    save_dir = '/data/zhangwt/data4prediction/8peptides/structured_data'
+    print("total {} datasets h5file to be generated".format(len(datasets)))
 
-    # 2. convert target datasets to normalized data and save 
-    pass
-
-    # generate normed structured data for ranking,reg training
-    # dataset_path = './data_antibact/final_data/pretrain_based/structured_data_csv/data4training.csv'
-    # model_ckpt = './ranking_exp/dae/best/final.ckpt'
-    # norm_parms = './antibact_prediction/norm_args/data4daetraining_args.npy'
-    # out_dir = './data_antibact/final_data/pretrain_based'
-    # encodingProcessor = encodingProcessor(model_ckpt,norm_parms)
-    # encodingProcessor.get_data_from_dataset(dataset_path)
-    # encodingProcessor.generate_normed_data(out_dir=out_dir)
-
-    # generate normed structured data for prediction
-    # dataset_path = './data_antibact/final_data/pretrain_based/structured_data_csv/data4pred_bau.csv'
-    # model_ckpt = './ranking_exp/dae/best/final.ckpt'
-    # norm_parms = './antibact_prediction/norm_args/data4daetraining_args.npy'
-    # out_dir = './antibact_prediction'
-    # encodingProcessor = encodingProcessor(model_ckpt,norm_parms)
-    # encodingProcessor.get_data_from_dataset(dataset_path)
-    # encodingProcessor.generate_normed_data(out_dir=out_dir)
+    for path in datasets:
+        Processor.get_data_from_dataset(path)
+        _, fname = os.path.split(path)
+        fname, _ = os.path.splitext(fname)
+        print("file {} start generation".format(os.path.join(save_dir,'{}.h5'.format(fname))))
+        Processor.generate_normed_data(save_dir,'{}.h5'.format(fname))
