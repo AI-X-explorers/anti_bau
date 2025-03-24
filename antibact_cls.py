@@ -11,7 +11,7 @@ import torch.nn as nn
 # For DDP
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
-from transformers import AdamW, get_linear_schedule_with_warmup
+from transformers import  get_linear_schedule_with_warmup
 
 from dataset import AntibactCLS_Dataset
 from model import AntibactCLSModel
