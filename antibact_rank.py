@@ -11,7 +11,7 @@ import torch.nn as nn
 # For DDP
 from collections import namedtuple
 from operator import attrgetter
-from transformers import AdamW, get_linear_schedule_with_warmup
+from transformers import get_linear_schedule_with_warmup
 from torch.utils.data.sampler import WeightedRandomSampler
 from dataset import LambdaRank_dataset
 from model import AntibactRegModel,NormalMLP
