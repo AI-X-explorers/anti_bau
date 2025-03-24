@@ -7,7 +7,7 @@ git clone git@github.com:AI-X-explorers/anti_bau.git
 As a prerequisite, you must have PyTorch installed to use this repository,we recommend pytorch version 1.7.1.
 You can create virtual enviroment by:
 ```
-conda create -n torch1.7 python=3.8
+conda create -n few_shot python=3.8
 pip install -r requirements.txt
 ```
 ### Train a classification model
