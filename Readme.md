@@ -4,7 +4,7 @@ First clone codebase to your local directory
 ```bash
 git clone git@github.com:AI-X-explorers/anti_bau.git
 ```
-As a prerequisite, you must have PyTorch installed to use this repository,we recommend pytorch version 1.7.1.
+As a prerequisite, you must have PyTorch installed to use this repository,we recommend pytorch version 1.8.0.
 You can create virtual enviroment by:
 ```
 conda create -n few_shot python=3.8
