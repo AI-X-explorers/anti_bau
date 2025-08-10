@@ -10,6 +10,8 @@ You can create virtual enviroment by:
 conda create -n few_shot python=3.8
 pip install -r requirements.txt
 ```
+### Data Prepare
+Prepare a CSV file with sequence and label columns, then use `embedding_data.py`  for ESM embeddings or `generate_stc_csv.py` (data_preprocess folder) for structural descriptors.
 ### Train a classification model
 ```python
 ### step1: finetune with bacteria P.a
